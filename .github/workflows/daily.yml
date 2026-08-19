@@ -1,0 +1,54 @@
+name: daily-check
+
+on:
+  schedule:
+    # 18:00 IST -- roughly an hour after NSE publishes. The second run is the
+    # retry window: free-tier cron is late or dropped often enough that a single
+    # fixed time loses days.
+    - cron: "30 12 * * 1-5"
+    - cron: "30 15 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency: daily-check
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install "nse-warehouse @ git+https://github.com/siddharthgaur1/nse-warehouse"
+
+      - run: python test_monitor.py
+
+      - id: run
+        shell: bash
+        run: |
+          set +e
+          python monitor.py 2>&1 | tee run.log
+          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit metrics
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add metrics.jsonl
+          git diff --staged --quiet || git commit -m "metrics: $(date -u +%F)"
+          git push
+
+      - name: Open an issue on a failed check
+        if: steps.run.outputs.code == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue create --title "Data quality check failed $(date -u +%F)" --body-file run.log
+
+      - name: Note an unavailable source
+        if: steps.run.outputs.code == '75'
+        run: echo "::warning::NSE source unavailable -- the later cron run retries."
