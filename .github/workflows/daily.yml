@@ -23,6 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Not the default depth-1: the rebase below needs real history, and a
+          # shallow clone makes it fail exactly when something has landed since
+          # checkout -- the one case the rebase exists to survive.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -88,3 +93,12 @@ jobs:
       - name: Fail the job on a failed check
         if: steps.run.outputs.code == '1'
         run: exit 1
+
+      # 0, 1 and 75 are the codes monitor.py chooses. Anything else -- a bad
+      # argument (2), an OOM kill (137), a segfault (139) -- would otherwise
+      # pass silently green, since the step above only reacts to 1.
+      - name: Fail on an unexpected exit
+        if: steps.run.outputs.code != '0' && steps.run.outputs.code != '1' && steps.run.outputs.code != '75'
+        run: |
+          echo "::error::monitor.py exited ${{ steps.run.outputs.code }}"
+          exit 1

@@ -16,6 +16,7 @@ original. The history is append-only, so a reader takes the highest revision.
 Exit codes:
     0   healthy, or nothing published (holiday), or already recorded
     1   a check failed -- the workflow opens an issue
+    2   bad arguments -- not a data-quality failure, so no issue is filed
     75  source unavailable (EX_TEMPFAIL) -- the later cron run retries
 """
 
@@ -117,7 +118,13 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     force = "--force" in argv
     argv = [a for a in argv if a != "--force"]
-    day = date.fromisoformat(argv[0]) if argv else _default_day()
+    try:
+        day = date.fromisoformat(argv[0]) if argv else _default_day()
+    except ValueError:
+        # Bad input is not a data-quality failure. Exiting 2 keeps it out of the
+        # issue tracker and lands it in the workflow's unexpected-exit guard.
+        print(f"usage: monitor.py [YYYY-MM-DD] [--force]  (got {argv[0]!r})")
+        return 2
 
     history = _history(METRICS)
     prior = [h for h in history if h["date"] == day.isoformat()]
