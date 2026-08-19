@@ -9,6 +9,10 @@ The history file is the baseline. That is why there is no warehouse build in CI
 and no second copy of the quality suite: one day's file plus sixty days of
 committed numbers is enough to catch a truncated or malformed publish.
 
+Records are keyed on (date, revision): a day NSE republishes with corrections
+is re-measured with `--force`, appending a new revision rather than editing the
+original. The history is append-only, so a reader takes the highest revision.
+
 Exit codes:
     0   healthy, or nothing published (holiday), or already recorded
     1   a check failed -- the workflow opens an issue
@@ -111,17 +115,27 @@ def _default_day() -> date:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    force = "--force" in argv
+    argv = [a for a in argv if a != "--force"]
     day = date.fromisoformat(argv[0]) if argv else _default_day()
 
     history = _history(METRICS)
-    if any(h["date"] == day.isoformat() for h in history):
+    prior = [h for h in history if h["date"] == day.isoformat()]
+    if prior and not force:
         # A retry run after a failure lands here, which is what stops the second
-        # cron of the day from filing a duplicate issue.
-        print(f"{day}: already recorded")
+        # cron of the day from filing a duplicate issue. Use --force to re-measure
+        # a day NSE has since republished with corrections.
+        print(f"{day}: already recorded (--force to re-measure)")
         return 0
 
+    downloader = Downloader(DATA)
+    if force:
+        # A corrected republish has to be re-downloaded; fetch_day returns the
+        # cached ZIP otherwise and would just re-measure the stale file.
+        downloader.path_for(day).unlink(missing_ok=True)
+
     try:
-        path = Downloader(DATA).fetch_day(day)
+        path = downloader.fetch_day(day)
     except Exception as exc:  # network refusal, rate limit, exhausted retries
         print(f"{day}: source unavailable -- {exc}")
         return EX_TEMPFAIL
@@ -131,7 +145,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     record = measure(day, read_zip(path))
-    failures = compare(record, history)
+    record["revision"] = len(prior)
+    # Earlier revisions of today are not baseline history for today.
+    failures = compare(record, [h for h in history if h["date"] < day.isoformat()])
     record["failures"] = failures
 
     # Written before the failure is reported, so a failing check still leaves a

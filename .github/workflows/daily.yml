@@ -2,18 +2,21 @@ name: daily-check
 
 on:
   schedule:
-    # 18:00 IST -- roughly an hour after NSE publishes. The second run is the
-    # retry window: free-tier cron is late or dropped often enough that a single
-    # fixed time loses days.
-    - cron: "30 12 * * 1-5"
-    - cron: "30 15 * * 1-5"
+    # UTC. NSE publishes the UDiFF bhavcopy in the IST evening; these are 19:30
+    # and 22:30 IST. The second is a genuine retry window, not a duplicate:
+    # free-tier cron is late or dropped often enough that one fixed time loses
+    # days. Verify against actual publication time and tighten if 19:30 is early.
+    - cron: "0 14 * * 1-5"
+    - cron: "0 17 * * 1-5"
   workflow_dispatch:
 
 permissions:
   contents: write
   issues: write
 
-concurrency: daily-check
+concurrency:
+  group: daily-monitor
+  cancel-in-progress: false
 
 jobs:
   check:
@@ -24,31 +27,61 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install "nse-warehouse @ git+https://github.com/siddharthgaur1/nse-warehouse"
+      - run: pip install "nse-warehouse @ git+https://github.com/siddharthgaur1/nse-warehouse@master"
 
+      # Offline: fixtures are constructed in-process, so a flaky NSE cannot
+      # turn a green codebase red here.
       - run: python test_monitor.py
 
+      # Never fails the job itself. The metrics commit has to run even when a
+      # check fails, so the job's own verdict is deferred to the last step.
       - id: run
         shell: bash
         run: |
           set +e
           python monitor.py 2>&1 | tee run.log
-          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "75" ]; then
+            echo "::warning::NSE source unavailable -- the ${{ github.event.schedule == '0 14 * * 1-5' && '17:00 UTC' || 'next' }} run retries."
+          fi
+          exit 0
 
       - name: Commit metrics
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add metrics.jsonl
-          git diff --staged --quiet || git commit -m "metrics: $(date -u +%F)"
-          git push
+          if git diff --staged --quiet; then
+            echo "no new metrics"
+            exit 0
+          fi
+          git commit -m "metrics: $(date -u +%F)"
+          # Anything landed since checkout would make a bare push fail, and fail
+          # quietly if the exit code went unchecked. set -e makes a conflicting
+          # rebase stop the job loudly instead.
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
 
-      - name: Open an issue on a failed check
+      - name: Report a failed check
         if: steps.run.outputs.code == '1'
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue create --title "Data quality check failed $(date -u +%F)" --body-file run.log
+        run: |
+          set -euo pipefail
+          # A persistent failure comments on the standing issue rather than
+          # filing a fresh one every weekday.
+          existing=$(gh issue list --state open --search 'in:title "Data quality check failed"' \
+                       --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file run.log
+          else
+            gh issue create --title "Data quality check failed" --body-file run.log
+          fi
 
-      - name: Note an unavailable source
-        if: steps.run.outputs.code == '75'
-        run: echo "::warning::NSE source unavailable -- the later cron run retries."
+      - name: Fail the job on a failed check
+        if: steps.run.outputs.code == '1'
+        run: exit 1
