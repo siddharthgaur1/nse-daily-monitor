@@ -27,7 +27,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install "nse-warehouse @ git+https://github.com/siddharthgaur1/nse-warehouse@master"
+      # Pinned to a SHA, not a branch: a refactor in the warehouse should not
+      # be able to break this pipeline without a deliberate bump here.
+      - run: pip install "nse-warehouse @ git+https://github.com/siddharthgaur1/nse-warehouse@b2b2b6172dbfdf2087d20b2d28d64dd8d6697333"
 
       # Offline: fixtures are constructed in-process, so a flaky NSE cannot
       # turn a green codebase red here.
@@ -72,14 +74,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # A persistent failure comments on the standing issue rather than
-          # filing a fresh one every weekday.
-          existing=$(gh issue list --state open --search 'in:title "Data quality check failed"' \
-                       --json number --jq '.[0].number // empty')
+          gh label create data-quality --color B60205 --description "Failed daily check" --force
+          # Listed by label, not by search: the search index lags a minute or
+          # more behind a freshly filed issue, so a create-then-search in the
+          # same run can miss and file a duplicate anyway.
+          existing=$(gh issue list --label data-quality --state open --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body-file run.log
           else
-            gh issue create --title "Data quality check failed" --body-file run.log
+            gh issue create --title "Data quality check failed" --label data-quality --body-file run.log
           fi
 
       - name: Fail the job on a failed check

@@ -34,6 +34,23 @@ bhavcopy after the day's run, `python monitor.py <date> --force` re-downloads
 it and appends a new revision rather than editing the original. The file stays
 append-only; a reader takes the highest revision for a date.
 
+## The first 30 records are a seeded backfill
+
+`metrics.jsonl` opens with 30 trading days (2026-07-08 to 2026-08-18) measured
+locally in one pass before the pipeline went live, so the coverage check has a
+baseline from its first scheduled run instead of after six weeks of collecting
+one. Everything from 2026-08-19 onward is a scheduled run. The seeded rows are
+identical in shape to the scheduled ones -- same code path, same `revision: 0`.
+
+## If the commits stop, the schedule dies quietly
+
+GitHub disables scheduled workflows in repositories with no activity for 60
+days. The daily metrics commit is that activity, so a healthy pipeline keeps
+itself alive. A pipeline that silently stops committing takes the cron down
+with it about two months later, and nothing announces it. If `metrics.jsonl`
+has a gap of more than a few days, check that the schedule is still enabled
+before debugging anything else.
+
 ## Commits here are from a bot
 
 The daily metrics commits are authored by `github-actions[bot]`, so they do not
