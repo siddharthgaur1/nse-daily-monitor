@@ -60,7 +60,11 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add metrics.jsonl
+          # Surface staleness on the landing page: a dead cron is otherwise
+          # only visible to someone who thinks to diff the metrics file.
+          last=$(tail -n 1 metrics.jsonl | python -c "import json,sys; print(json.loads(sys.stdin.read())['date'])")
+          sed -i "s|^\*\*Last record:\*\* .*|**Last record:** $last · [run history](../../actions)|" README.md
+          git add metrics.jsonl README.md
           if git diff --staged --quiet; then
             echo "no new metrics"
             exit 0

@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+import monitor
 from monitor import _ohlc_broken, compare, measure
 from datetime import date
 
@@ -41,6 +42,26 @@ def test_compare():
 
     assert any("OHLC" in f for f in compare(measure(date(2026, 8, 19), [bar(high=90.0)]), []))
     assert any("zero equity rows" in f for f in compare(measure(date(2026, 8, 19), []), []))
+
+
+def test_exit_codes():
+    """An outage is not a data failure, and bad input is neither."""
+    class Unreachable:
+        def __init__(self, root):
+            pass
+
+        def fetch_day(self, day):
+            raise RuntimeError("connection reset by peer")
+
+    original = monitor.Downloader
+    monitor.Downloader = Unreachable
+    try:
+        # A far-future date is absent from any history, so this reaches the fetch.
+        assert monitor.main(["2099-01-04"]) == 75
+    finally:
+        monitor.Downloader = original
+
+    assert monitor.main(["notadate"]) == 2
 
 
 if __name__ == "__main__":
