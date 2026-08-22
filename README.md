@@ -1,5 +1,9 @@
 # nse-daily-monitor
 
+[![Portfolio](https://img.shields.io/badge/↩-siddharthgaur1-111827?style=flat-square)](https://github.com/siddharthgaur1)
+[![daily-check](https://github.com/siddharthgaur1/nse-daily-monitor/actions/workflows/daily.yml/badge.svg)](https://github.com/siddharthgaur1/nse-daily-monitor/actions/workflows/daily.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A daily data-quality check on the NSE equity bhavcopy, running on a schedule
 since August 2026.
 
