@@ -7,7 +7,7 @@
 A daily data-quality check on the NSE equity bhavcopy, running on a schedule
 since August 2026.
 
-**Last record:** 2026-08-25 · [run history](../../actions)
+**Last record:** 2026-08-26 · [run history](../../actions)
 
 That date is rewritten by the pipeline itself on every commit. A dead schedule
 is silent by construction, so if this is more than a few days stale the cron has
