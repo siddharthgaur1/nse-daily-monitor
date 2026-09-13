@@ -24,6 +24,10 @@ rates only -- row and symbol totals, null rates, bound-violation counts, breadth
 -- never a reconstructable quote. That is a deliberate constraint inherited from
 nse-warehouse, not an oversight.
 
+![Equity rows per daily record, 2026-07-08 to 2026-09-11, every check passing](docs/check-history.png)
+
+*Equity rows per record in `metrics.jsonl` (derived counts only; shaded = seeded backfill), as of 2026-09-11. Regenerate: `python scripts/make_readme_chart.py`.*
+
 ## What it checks
 
 | Check | Fails when |
