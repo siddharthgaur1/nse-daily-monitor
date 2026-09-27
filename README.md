@@ -35,7 +35,10 @@ nse-warehouse, not an oversight.
 | Publish integrity | NSE served a file that parsed to zero equity rows |
 | OHLC bounds | `high < low`, or high below open/close, or low above them |
 | Null close rate | above 1% of rows |
-| Breadth | symbol count below half the trailing median -- a truncated file |
+| Breadth | symbol count below half the median of the last 60 records -- a truncated file (skipped until 5 records exist) |
+
+A failure opens one issue labelled `data-quality`; later failures comment on it
+while it stays open, so a bad week is one thread rather than five.
 
 Holidays are not failures: NSE returns 404 and the run exits clean. A network
 refusal exits 75 and the second cron of the day retries rather than filing a
