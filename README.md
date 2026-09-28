@@ -56,6 +56,13 @@ baseline from its first scheduled run instead of after six weeks of collecting
 one. Everything from 2026-08-19 onward is a scheduled run. The seeded rows are
 identical in shape to the scheduled ones -- same code path, same `revision: 0`.
 
+The step from ~3,190 to ~3,340 rows on 2026-08-17 is NSE, not the backfill
+boundary: that day's bhavcopy added 164 EQ symbols absent from every earlier
+file (2 of them appear on 2026-07-08, 07-31 and 08-13), and they stayed
+(142 still present on 2026-09-25). Most are thinly traded -- median 29 trades on
+the first day. No check fired, correctly: breadth only fails on a drop below
+half the trailing median.
+
 ## If the commits stop, the schedule dies quietly
 
 GitHub disables scheduled workflows in repositories with no activity for 60
